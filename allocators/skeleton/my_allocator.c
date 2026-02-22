@@ -14,6 +14,7 @@
 
 #ifdef GAMBLE_MODE
 
+//Allocator Statistics
 static size_t total_allocs = 0;
 static size_t total_frees = 0;
 static size_t total_bytes_requested = 0;
@@ -97,11 +98,12 @@ static void my_free(void *ptr) {
 
   #ifdef GAMBLE_MODE
 
-  total_free++;
+  total_frees++;
 
   if(current_live_blocks > 0){
     current_live_blocks--;
   }
+  #endif
   munmap((void *)header, total);
 }
 
@@ -170,3 +172,22 @@ allocator_t allocator = {.malloc = my_malloc,
 allocator_t *get_test_allocator(void) { return &allocator; }
 
 allocator_t *get_bench_allocator(void) { return &allocator; }
+
+
+//Gamble (:
+
+#ifdef GAMBLE_MODE
+
+__attribute__((destructor))
+  static void casino_report(void){
+    printf("\n======= MEMORY CASINO REPORT =======\n");
+    printf("Total bets placed:         %zu\n", total_allocs);
+    printf("Total cash-outs:           %zu\n", total_frees);
+    printf("Total bytes wagered:       %zu\n", total_bytes_requested);
+    printf("Largest bet placed:        %zu\n", largest_allocation);
+    printf("Most hands played at once: %zu\n", peak_live_blocks);
+    printf("Currently playing:         %zu\n", current_live_blocks);
+    printf("====================================\n");
+  }
+
+#endif
