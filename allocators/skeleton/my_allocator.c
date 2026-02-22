@@ -60,6 +60,23 @@ static void *my_malloc(size_t size) {
   header_t *header = (header_t *)block;
   header->size = aligned;
   header->magic = MAGIC;
+
+  #ifdef GAMBLE_MODE
+
+  total_allocs++;
+  total_bytes_requested += size;
+
+  if(size>largest_allocation){
+    largest_allocation = size;
+  }
+
+  current_live_blocks++;
+
+  if(current_live_blocks > peak_live_blocks){
+    peak_live_blocks = current_live_blocks;
+  }
+  #endif
+
   return (void *)(header+1);
 }
 
@@ -77,6 +94,14 @@ static void my_free(void *ptr) {
     return;  // reject invalid free, ts IS NOT magical
 
   header->magic = 0; // keel da poison
+
+  #ifdef GAMBLE_MODE
+
+  total_free++;
+
+  if(current_live_blocks > 0){
+    current_live_blocks--;
+  }
   munmap((void *)header, total);
 }
 
@@ -131,7 +156,7 @@ allocator_t allocator = {.malloc = my_malloc,
                          .teardown = my_teardown,
                          .name = "normalloc",
                          .author = "Dylan Pachan",
-                         .version = "0.7.0",
+                         .version = "0.7.1",
                          .description = "Gamble allocator.",
                          .memory_backend = "mmap",
                          .features = {.thread_safe = false,
