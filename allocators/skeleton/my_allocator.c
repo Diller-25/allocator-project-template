@@ -12,6 +12,16 @@
 
 #define MAGIC 0xC0FFEE1234ABCDEF //fight against THE POISONNN
 
+#ifdef GAMBLE_MODE
+
+static size_t total_allocs = 0;
+static size_t total_frees = 0;
+static size_t total_bytes_requested = 0;
+static size_t largest_allocation = 0;
+static size_t current_live_blocks = 0;
+static size_t peak_live_blocks = 0;
+
+#endif
 
 
 typedef struct {
@@ -121,8 +131,8 @@ allocator_t allocator = {.malloc = my_malloc,
                          .teardown = my_teardown,
                          .name = "normalloc",
                          .author = "Dylan Pachan",
-                         .version = "0.6.1",
-                         .description = "Simple mmap-per-allocation allocator.",
+                         .version = "0.7.0",
+                         .description = "Gamble allocator.",
                          .memory_backend = "mmap",
                          .features = {.thread_safe = false,
                                       .per_thread_cache = false,
