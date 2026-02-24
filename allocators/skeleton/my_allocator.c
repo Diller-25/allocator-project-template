@@ -49,8 +49,18 @@ static void *my_malloc(size_t size) {
   if (size == 0 || size > SIZE_MAX - sizeof(header_t)){
     return NULL;
   }
+  
+  #ifdef GAMBLE_MODE
+  if((rand()%50==0)){
+    printf("blows up allocation with mind");
+    return NULL;
+  }
+  printf("blows up party balloons with mind");
+#endif
 
   size_t aligned = align_up(size);
+
+
   size_t total = sizeof(header_t) + aligned;
 
   void *block =mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -62,21 +72,6 @@ static void *my_malloc(size_t size) {
   header->size = aligned;
   header->magic = MAGIC;
 
-  #ifdef GAMBLE_MODE
-
-  total_allocs++;
-  total_bytes_requested += size;
-
-  if(size>largest_allocation){
-    largest_allocation = size;
-  }
-
-  current_live_blocks++;
-
-  if(current_live_blocks > peak_live_blocks){
-    peak_live_blocks = current_live_blocks;
-  }
-  #endif
 
   return (void *)(header+1);
 }
@@ -158,7 +153,7 @@ allocator_t allocator = {.malloc = my_malloc,
                          .teardown = my_teardown,
                          .name = "normalloc",
                          .author = "Dylan Pachan",
-                         .version = "0.7.1",
+                         .version = "0.7.2",
                          .description = "Gamble allocator.",
                          .memory_backend = "mmap",
                          .features = {.thread_safe = false,
