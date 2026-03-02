@@ -96,13 +96,13 @@ typedef struct arena {
     size_t span_count;
 } arena_t;
 
-#define NUM_ARENAS 4
+#define NUM_ARENAS 6 //used to be 4
 
 static arena_t arenas[NUM_ARENAS];
 
 
 
-#define DEFAULT_SPAN_SIZE (256 * 1024)   // 256 KB
+#define DEFAULT_SPAN_SIZE (3072 * 1024)   // 3072 KB
 
 static int init_span(span_t *span, size_t span_size) {
     if (span_size < sizeof(block_t))
@@ -505,7 +505,7 @@ allocator_t allocator = {.malloc = my_malloc,
                          .teardown = my_teardown,
                          .name = "dualalloc",
                          .author = "Dylan Pachan",
-                         .version = "1.0.0",
+                         .version = "1.2.0",
                          .description = "Dual-mode mmap-based allocator with arena/span support.",
                          .memory_backend = "mmap",
                          .features = {.thread_safe = false,
