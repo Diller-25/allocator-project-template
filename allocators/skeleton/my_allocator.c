@@ -14,30 +14,56 @@
 
 
 
-
+/*
+ * align_up
+ *
+ * Rounds a size up to the nearest multiple of ALIGNMENT.
+ * Ensures all returned pointers meet minimum alignment guarantees.
+ */
 static size_t align_up(size_t size) {
     return (size + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 }
 
 
 /*
- * Replace these stubs with your own logic.
+ * my_init
+ *
+ * Initializes allocator state.
+ *
+ * This allocator does not require explicit initialization
+ * because all state is statically allocated.
+ *
+ * Returns:
+ *   0 on success.
  */
 
 static int my_init(void) { return 0; }
+
+/*
+ * my_teardown
+ *
+ * Releases all operating system resources acquired by the allocator.
+ *
+ * In default mode:
+ *   No action is required because each allocation is unmapped
+ *   immediately in my_free().
+ */
 
 static void my_teardown(void) {}
 
 #ifdef GAMBLE_MODE
 
-//Allocator Statistics
-// static size_t total_allocs = 0;
-// static size_t total_frees = 0;
-// static size_t total_bytes_requested = 0;
-// static size_t largest_allocation = 0;
-// static size_t current_live_blocks = 0;
-// static size_t peak_live_blocks = 0;
-
+/*
+ * block_t
+ *
+ * Represents a memory block inside a span.
+ *
+ * size      - Size of the usable memory region.
+ * magic     - Constant used to validate integrity.
+ * is_free   - Indicates whether the block is available.
+ *
+ * Blocks are laid out sequentially within a span.
+ */
 typedef struct block {
     size_t size;              // size of this block
     uint64_t magic;           // validation
@@ -46,6 +72,17 @@ typedef struct block {
     uint64_t more_padding;
 } block_t;
 
+/*
+ * span_t
+ *
+ * Represents a contiguous region of memory obtained
+ * from the OS via mmap.
+ *
+ * start - Beginning address of the mapped region.
+ * size  - Total size of the mapped region.
+ *
+ * Each span initially contains a single large free block.
+ */
 #define MAX_SPAN_SEARCH_ATTEMPTS 5
 typedef struct span {
     void *start;              // beginning of mmap region
@@ -137,6 +174,21 @@ static span_t *pick_random_span(arena_t *arena) {
     return &arena->spans[rand() % arena->span_count];
 }
 
+
+/*
+ * my_malloc
+ *
+ * Allocates a block of memory of at least `size` bytes.
+ *
+ * Behavior:
+ * - Returns NULL if size is 0 or if allocation fails.
+ * - Returned memory is aligned to ALIGNMENT bytes.
+ * - In default mode, memory is obtained directly via mmap.
+ * - In GAMBLE_MODE, memory is allocated from an arena span.
+ *
+ * The returned pointer refers to usable memory and does not
+ * include allocator metadata.
+ */
 static void *my_malloc(size_t size) {
     if (size == 0 || size > SIZE_MAX - sizeof(block_t))
         return NULL;
@@ -191,6 +243,23 @@ static void *my_malloc(size_t size) {
     return NULL;
 }
 
+
+/*
+ * my_free
+ *
+ * Frees a previously allocated block.
+ *
+ * Behavior:
+ * - If ptr is NULL, no action is taken.
+ * - If the pointer is invalid (magic mismatch), the request
+ *   is ignored to prevent undefined behavior.
+ *
+ * In default mode:
+ * - The underlying memory is released using munmap.
+ *
+ * In GAMBLE_MODE:
+ * - The block is marked as free and may be reused.
+ */
 static void my_free(void *ptr) {
   if(ptr == NULL){
     return;
@@ -204,6 +273,21 @@ static void my_free(void *ptr) {
   block->magic = MAGIC; //dont turn to 0 here, messes up linear search
 }
 
+
+/*
+ * my_realloc
+ *
+ * Resizes a previously allocated block.
+ *
+ * Behavior:
+ * - If ptr is NULL, behaves like malloc(size).
+ * - If size is 0, behaves like free(ptr) and returns NULL.
+ * - Otherwise, allocates a new block, copies the minimum
+ *   of old and new sizes, and frees the old block.
+ *
+ * Returns:
+ * - Pointer to resized memory, or NULL on failure.
+ */
 static void *my_realloc(void *ptr, size_t size) {
 
   if (ptr == NULL) {
@@ -234,6 +318,17 @@ static void *my_realloc(void *ptr, size_t size) {
     return new_ptr;
 }
 
+
+/*
+ * my_calloc
+ *
+ * Allocates memory for an array of nmemb elements of size bytes each.
+ *
+ * Behavior:
+ * - Returns NULL if overflow would occur.
+ * - Memory is zero-initialized.
+ * - Internally calls my_malloc and then memset to zero.
+ */
 static void *my_calloc(size_t nmemb, size_t size) {
   if (nmemb != 0 && size > SIZE_MAX / nmemb) {
         return NULL;  // overflow
@@ -256,6 +351,21 @@ typedef struct {
     uint64_t magic;  //header 16 byte sized
 } header_t;
 
+
+/*
+ * my_malloc
+ *
+ * Allocates a block of memory of at least `size` bytes.
+ *
+ * Behavior:
+ * - Returns NULL if size is 0 or if allocation fails.
+ * - Returned memory is aligned to ALIGNMENT bytes.
+ * - In default mode, memory is obtained directly via mmap.
+ * - In GAMBLE_MODE, memory is allocated from an arena span.
+ *
+ * The returned pointer refers to usable memory and does not
+ * include allocator metadata.
+ */
 static void *my_malloc(size_t size) {
   if (size == 0 || size > SIZE_MAX - sizeof(header_t)){
     return NULL;
@@ -282,6 +392,23 @@ static void *my_malloc(size_t size) {
   return (void *)(header+1);
 }
 
+
+/*
+ * my_free
+ *
+ * Frees a previously allocated block.
+ *
+ * Behavior:
+ * - If ptr is NULL, no action is taken.
+ * - If the pointer is invalid (magic mismatch), the request
+ *   is ignored to prevent undefined behavior.
+ *
+ * In default mode:
+ * - The underlying memory is released using munmap.
+ *
+ * In GAMBLE_MODE:
+ * - The block is marked as free and may be reused.
+ */
 static void my_free(void *ptr) {
   if(ptr == NULL){
     return;
@@ -300,6 +427,21 @@ static void my_free(void *ptr) {
   munmap((void *)header, total);
 }
 
+
+/*
+ * my_realloc
+ *
+ * Resizes a previously allocated block.
+ *
+ * Behavior:
+ * - If ptr is NULL, behaves like malloc(size).
+ * - If size is 0, behaves like free(ptr) and returns NULL.
+ * - Otherwise, allocates a new block, copies the minimum
+ *   of old and new sizes, and frees the old block.
+ *
+ * Returns:
+ * - Pointer to resized memory, or NULL on failure.
+ */
 static void *my_realloc(void *ptr, size_t size) {
 
   if (ptr == NULL) {
@@ -327,6 +469,17 @@ static void *my_realloc(void *ptr, size_t size) {
     return new_ptr;
 }
 
+
+/*
+ * my_calloc
+ *
+ * Allocates memory for an array of nmemb elements of size bytes each.
+ *
+ * Behavior:
+ * - Returns NULL if overflow would occur.
+ * - Memory is zero-initialized.
+ * - Internally calls my_malloc and then memset to zero.
+ */
 static void *my_calloc(size_t nmemb, size_t size) {
   if (nmemb != 0 && size > SIZE_MAX / nmemb) {
         return NULL;  // overflow
@@ -352,8 +505,8 @@ allocator_t allocator = {.malloc = my_malloc,
                          .teardown = my_teardown,
                          .name = "dualalloc",
                          .author = "Dylan Pachan",
-                         .version = "0.9.0",
-                         .description = "Schizo allocator.",
+                         .version = "1.0.0",
+                         .description = "Dual-mode mmap-based allocator with arena/span support.",
                          .memory_backend = "mmap",
                          .features = {.thread_safe = false,
                                       .per_thread_cache = false,
@@ -367,20 +520,4 @@ allocator_t *get_test_allocator(void) { return &allocator; }
 
 allocator_t *get_bench_allocator(void) { return &allocator; }
 
-//Gamble (:
-
-// #ifdef GAMBLE_MODE
-
-// __attribute__((destructor))
-//   static void casino_report(void){
-//     printf("\n======= MEMORY CASINO REPORT =======\n");
-//     printf("Total bets placed:         %zu\n", total_allocs);
-//     printf("Total cash-outs:           %zu\n", total_frees);
-//     printf("Total bytes wagered:       %zu\n", total_bytes_requested);
-//     printf("Largest bet placed:        %zu\n", largest_allocation);
-//     printf("Most hands played at once: %zu\n", peak_live_blocks);
-//     printf("Currently playing:         %zu\n", current_live_blocks);
-//     printf("====================================\n");
-//   }
-// #endif
 
